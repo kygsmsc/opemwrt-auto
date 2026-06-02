@@ -47,8 +47,18 @@ on:
         default: false
         type: boolean
         
+      config_save_path:
+        description: "配置文件保存到仓库的路径（默认即可）"
+        required: true
+        default: ".config"
+        type: text
 
-
+env:
+  FEEDS_CONF: feeds.conf.default
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
+  TZ: Asia/Shanghai
+  UPLOAD_RELEASE: true
 
 jobs:
   build:
