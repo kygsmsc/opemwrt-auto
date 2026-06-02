@@ -1,15 +1,9 @@
-#
+#============================================================================================
 # https://github.com/P3TERX/Actions-OpenWrt
-#
-# File: .github/workflows/openwrt-bulder.yml
-# Description: Build OpenWrt using GitHub Actions
-#
-# Copyright (c) 2019-2024 P3TERX <https://p3terx.com>
-#
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
-
+# https://github.com/ophub/amlogic-s9xxx-openwrt
+# https://github.com/3wlh/Actions-OpenWrt
+# Description: OpenWrt 按配置编译固件（加载1号生成的配置参数 + 自动编译固件 + 发布固件）
+#============================================================================================
 name: 2.OpenWrt-按导入配置自动编译
 
 on:
