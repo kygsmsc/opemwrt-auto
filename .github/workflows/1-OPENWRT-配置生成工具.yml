@@ -35,12 +35,7 @@ on:
           - v23.05.2
           - v23.05.3
           - v23.05.4
-      ssh:
-        description: "启用 SSH 连接（可在线 make menuconfig）"
-        required: false
-        default: true  # boolean 类型默认值小写（此处GitHub会自动兼容，但显式小写更规范）
-        type: boolean
-
+      
 env:
   FEEDS_CONF: "feeds.conf.default"
   CONFIG_FILE: ".config"
