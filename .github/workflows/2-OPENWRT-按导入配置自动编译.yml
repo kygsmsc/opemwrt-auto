@@ -119,7 +119,7 @@ jobs:
             #BAN_VERS="${{inputs.banben}}"
             TAGS_NAME="istoreos"
         elif [[ "${{ inputs.source_branch }}" == *"kygs-openwrt"* ]]; then
-            REPO_URL="https://github.com/kygsmsc/immortalwrt.git"
+            REPO_URL="https://github.com/kygsmsc/immortalwrt"
             REPO_BRANCH="master"
             #BAN_VERS="${{inputs.banben}}"
             TAGS_NAME="kygs-openwrt"
