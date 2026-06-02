@@ -16,28 +16,50 @@ on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
-      source_branch:
-        description: "请选择OPEWRT的版本"
-        required: false
-        default: "openwrt-main"
+      source_repo:
+        description: "选择 OpenWrt 源码仓库（和1号文件保持一致）"
+        required: true
+        default: "lede-master"
         type: choice
         options:
-          - openwrt-main
-          - lede-master
-          - immortalwrt-master
-          - Lienol-master
-          - istoreos-master
-          - kygs-openwrt
-      banben:
-        description: "请选择OPENWRT的分支版本"
+          - lede-master               # LEDE 官方 (coolsnowwolf)
+          - openwrt-main              # OpenWrt 官方 main
+          - openwrt-24.10             # OpenWrt 24.10 稳定版
+          - openwrt-23.05             # OpenWrt 23.05 稳定版
+          - immortalwrt-master        # ImmortalWrt 最新
+          - immortalwrt-24.10         # ImmortalWrt 24.10
+          - istoreos-master           # iStoreOS 最新
+          - kygs-immortalwrt-master   # 私人仓库：kygsmsc/immortalwrt
+          
+      version_tag:
+        description: "选择源码版本 Tag（和1号文件保持一致）"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - v24.10.0
+          - v24.10.1
+          - v23.05.0
+          - v23.05.1
+          - v23.05.2
+          - v23.05.3
+          - v23.05.4
+          
+      config_file_path:
+        description: "1号文件生成的配置文件路径（默认：config/auto-gen/.config）"
         required: false
-        default: "master"
+        default: "config/auto-gen/.config"
         type: text
         
-env:
+#env:
   #FEEDS_CONF: feeds/${{ inputs.source_branch }}/feeds.conf.default
+  #FEEDS_CONF: feeds.conf.default
+  #CONFIG_FILE: config/${{ inputs.source_branch }}/.config
+  
+
+env:
   FEEDS_CONF: feeds.conf.default
-  CONFIG_FILE: config/${{ inputs.source_branch }}/.config
   DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
   DIY_P3_SH: diy-part3.sh
@@ -45,6 +67,7 @@ env:
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
+
 
 jobs:
   build:
@@ -61,88 +84,82 @@ jobs:
         sudo -E apt -y purge azure-cli* docker* ghc* zulu* llvm* firefox google* dotnet* powershell* openjdk* mysql* php* mongodb* dotnet* snap* aspnetcore*
         [ -n "$AGENT_TOOLSDIRECTORY" ] && sudo rm -rf "$AGENT_TOOLSDIRECTORY"
         sudo -E apt-get -qq update
-        # sudo -E apt -qy install $(curl -fsSL https://raw.githubusercontent.com/Plutonium141/openwrt-depends-ubuntu/main/ubuntu)
         sudo -E apt -y install $(curl -fsSL https://is.gd/depend_ubuntu_2204_openwrt)
-        # sudo -E apt-get -qq install $(curl -fsSL https://is.gd/depends_ubuntu_2204)
-        # sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
-        sudo apt-get install python3.9
+        sudo apt-get install python3.9 -y
         sudo -E apt-get -qq autoremove --purge
         sudo -E systemctl daemon-reload
-        sudo -E apt-get -qq  clean && sudo -E apt-get -qq autoclean
+        sudo -E apt-get -qq clean && sudo -E apt-get -qq autoclean
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /builder
         sudo chown $USER:$GROUPS /builder
-        
-   # - name: 创建模拟物理磁盘
-   #   id: disk
-   #   run: |
-   #       mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
-   #       root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
-   #       sudo truncate -s "${mnt_size}"G /mnt/mnt.img
-   #       sudo truncate -s "${root_size}"G /root.img
-   #       sudo losetup /dev/loop6 /mnt/mnt.img
-   #       sudo losetup /dev/loop7 /root.img
-   #       sudo pvcreate /dev/loop6
-   #       sudo pvcreate /dev/loop7
-   #       sudo vgcreate github /dev/loop6 /dev/loop7
-   #       sudo lvcreate -n runner -l 100%FREE github
-   #       sudo mkfs.xfs /dev/github/runner
-   #       sudo mkdir -p /builder
-   #       sudo mount /dev/github/runner /builder
-   #       sudo chown -R runner.runner /builder
-   #       df -Th $PWD
 
-    - name: 克隆源代码 [ ${{ inputs.source_branch }} ][${{inputs.banben}}]
+    - name: 自动匹配仓库地址与分支（对齐1号文件逻辑）
+      id: repo
+      run: |
+        case "${{ github.event.inputs.source_repo }}" in
+          lede-master)
+            REPO_URL="https://github.com/coolsnowwolf/lede"
+            REPO_BRANCH="master"
+            ;;
+          openwrt-main)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="main"
+            ;;
+          openwrt-24.10)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="openwrt-24.10"
+            ;;
+          openwrt-23.05)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="openwrt-23.05"
+            ;;
+          immortalwrt-master)
+            REPO_URL="https://github.com/immortalwrt/immortalwrt"
+            REPO_BRANCH="master"
+            ;;
+          immortalwrt-24.10)
+            REPO_URL="https://github.com/immortalwrt/immortalwrt"
+            REPO_BRANCH="openwrt-24.10"
+            ;;
+          istoreos-master)
+            REPO_URL="https://github.com/istoreos/istoreos"
+            REPO_BRANCH="main"
+            ;;
+          kygs-immortalwrt-master)
+            REPO_URL="https://github.com/kygsmsc/immortalwrt"
+            REPO_BRANCH="master"
+            ;;
+          *)
+            echo "错误：未定义的仓库"
+            exit 1
+            ;;
+        esac
+        echo "REPO_URL=$REPO_URL" >> $GITHUB_OUTPUT
+        echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_OUTPUT
+
+    - name: 克隆源代码并切换版本Tag（对齐1号文件逻辑）
       id: codes
       working-directory: /builder
       run: |
         df -hT $PWD
-         if [[ "${{ inputs.source_branch }}" == *"openwrt"* ]]; then
-            REPO_URL="https://github.com/openwrt/openwrt"
-            REPO_BRANCH="main"
-            TAGS_NAME="official"
-        elif [[ "${{ inputs.source_branch }}" == *"lede"* ]]; then
-            REPO_URL="https://github.com/coolsnowwolf/lede"
-            REPO_BRANCH="master"
-            TAGS_NAME="lede"
-        elif [[ "${{ inputs.source_branch }}" == *"immortalwrt"* ]]; then
-            REPO_URL="https://github.com/immortalwrt/immortalwrt"
-            REPO_BRANCH="master"
-            TAGS_NAME="immortalwrt"
-        elif [[ "${{ inputs.source_branch }}" == *"Lienol"* ]]; then
-            REPO_URL="https://github.com/Lienol/openwrt"
-            REPO_BRANCH="main"
-            TAGS_NAME="Lienol"
-        elif [[ "${{ inputs.source_branch }}" == *"istoreos"* ]]; then
-            REPO_URL="https://github.com/istoreos/istoreos"
-            REPO_BRANCH="master"
-            #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="istoreos"
-        elif [[ "${{ inputs.source_branch }}" == *"kygs-openwrt"* ]]; then
-            REPO_URL="https://github.com/kygsmsc/immortalwrt"
-            REPO_BRANCH="master"
-            #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="kygs-openwrt"
-        else
-            echo "未知的源代码存储库."
-              exit 1
-          fi
-        #git clone -q --single-branch --depth=1 --branch=${REPO_BRANCH} ${REPO_URL} openwrt
-        git clone ${REPO_URL} -b ${REPO_BRANCH} openwrt
-        ln -sf /builder/openwrt $GITHUB_WORKSPACE/openwrt
-        echo "REPO_URL=${REPO_URL}" >> ${GITHUB_OUTPUT}
-        echo "TAGS_NAME=${TAGS_NAME}" >> ${GITHUB_OUTPUT}
-        echo "status=success" >> ${GITHUB_OUTPUT}
+        REPO_URL="${{ steps.repo.outputs.REPO_URL }}"
+        REPO_BRANCH="${{ steps.repo.outputs.REPO_BRANCH }}"
+        VERSION_TAG="${{ github.event.inputs.version_tag }}"
         
-    - name: 切换OPENWRT的分支
-      run: |
+        # 克隆指定分支
+        git clone -b $REPO_BRANCH $REPO_URL openwrt
+        ln -sf /builder/openwrt $GITHUB_WORKSPACE/openwrt
         cd openwrt
-        make distclean
-        git fetch --tags --all  # 拉取所有标签和远程分支
-        git tag    # 你可以查看所有可用的版本
-        git branch -a  # 查看当前使用的版本
-        git checkout ${{inputs.banben}}   # 切换到指定的版本
-        git branch -a  # 查看当前使用的版本
+        
+        # 切换指定Tag（和1号文件逻辑一致）
+        if [ "$VERSION_TAG" != "latest" ]; then
+          git fetch --tags 2>/dev/null || true
+          git checkout $VERSION_TAG 2>/dev/null || echo "ℹ️ Tag 不存在，使用当前分支最新代码"
+        fi
+        
+        echo "REPO_URL=${REPO_URL}" >> ${GITHUB_OUTPUT}
+        echo "TAGS_NAME=${{ github.event.inputs.source_repo }}" >> ${GITHUB_OUTPUT}
+        echo "status=success" >> ${GITHUB_OUTPUT}
         
     - name: 加载自定义提要
       run: |
@@ -158,34 +175,33 @@ jobs:
     - name: 安装 feeds
       run: cd openwrt && ./scripts/feeds install -a
 
-   # - name: 再次更新 feeds
-    #  run: cd openwrt && ./scripts/feeds update -i -f
-
-   # - name: 再次安装 feeds
-    #  run: cd openwrt && ./scripts/feeds install -a -f
-
-    - name: 加载自定义配置
+    - name: 加载1号文件生成的配置文件
       run: |
+        # 加载自定义文件
         [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        
+        # 加载1号文件生成的.config（优先使用输入的路径）
+        CONFIG_FILE="${{ github.event.inputs.config_file_path }}"
+        if [ -e "$CONFIG_FILE" ]; then
+          mv "$CONFIG_FILE" openwrt/.config
+          echo "✅ 成功加载配置文件：$CONFIG_FILE"
+        else
+          echo "⚠️ 配置文件路径不存在：$CONFIG_FILE，使用默认配置"
+          touch openwrt/.config
+        fi
+        
+        # 执行自定义脚本2
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
         
-    #- name: SSH连接到Actions
-      #uses: P3TERX/ssh2actions@main
-      #uses: P3TERX/ssh2actions@v1.0.0
-      #if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh  != 'false') || contains(github.event.action, 'ssh')
-      #env:
-        #TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        #TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-
     - name: 下载 package
       id: package
       run: |
         cd openwrt
         make defconfig
         make download -j8
+        # 清理无效文件
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
@@ -194,8 +210,10 @@ jobs:
       run: |
         cd openwrt
         echo -e "$(nproc) thread compile"
+        # 编译失败时降级单线程编译
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
+        # 提取设备名称
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
@@ -204,14 +222,14 @@ jobs:
       if: (!cancelled())
       run: df -hT
 
-    - name: 上传bin目录
+    - name: 上传bin目录（可选）
       uses: actions/upload-artifact@main
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
       with:
         name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: openwrt/bin
 
-    - name: 组织文件
+    - name: 组织固件文件
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
@@ -236,7 +254,7 @@ jobs:
         [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: 上传固件以发布
+    - name: 上传固件到Release
       uses: softprops/action-gh-release@master
       if: steps.tag.outputs.status == 'success' && !cancelled()
       env:
@@ -246,13 +264,13 @@ jobs:
         body_path: release.txt
         files: ${{ env.FIRMWARE }}/*
 
-    - name: 删除工作流运行
+    - name: 清理旧工作流运行记录
       uses: Mattraks/delete-workflow-runs@main
       with:
         retain_days: 0
         keep_minimum_runs: 2
 
-    - name: 删除旧版本
+    - name: 删除旧版本Release
       uses: dev-drprasad/delete-older-releases@master
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
