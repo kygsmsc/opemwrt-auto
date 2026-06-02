@@ -5,45 +5,37 @@
 # Description: Build OpenWrt
 #============================================================================================
 
-name: OpenWrt 配置生成工具
+name: 1.OpenWrt-配置生成工具
 
 on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
-      source_repo:
-        description: "选择 OpenWrt 源码仓库"
-        required: true
-        default: "lede-master"
+      source_branch:
+        description: "请选择OPENWRT的分支"
+        required: false
+        default: "openwrt-main"
         type: choice
         options:
-          - lede-master               # LEDE 官方 (coolsnowwolf)
-          - openwrt-main              # OpenWrt 官方 main
-          - openwrt-24.10             # OpenWrt 24.10 稳定版
-          - openwrt-23.05             # OpenWrt 23.05 稳定版
-          - immortalwrt-master        # ImmortalWrt 最新
-          - immortalwrt-24.10         # ImmortalWrt 24.10
-          - istoreos-master           # iStoreOS 最新
-          - kygs-immortalwrt-master   # 你的私人仓库：kygsmsc/immortalwrt
-      version_tag:
-        description: "选择源码版本 Tag（ latest = 最新代码）"
-        required: true
-        default: "latest"
-        type: choice
-        options:
-          - latest
-          - v24.10.0
-          - v24.10.1
-          - v23.05.0
-          - v23.05.1
-          - v23.05.2
-          - v23.05.3
-          - v23.05.4
+          - openwrt-main
+          - lede-master
+          - immortalwrt-master
+          - Lienol-master
+          - istoreos-master
+          - kygs-openwrt
+          
+      banben:
+        description: "请选择OPENWRT的分支版本"
+        required: false
+        default: "master"
+        type: text
+        
       ssh:
-        description: "启用 SSH 连接（可在线 make menuconfig）"
+        description: "SSH定制固件配置"
         required: false
         default: true
         type: boolean
+        #type: Object
      
 
 env:
