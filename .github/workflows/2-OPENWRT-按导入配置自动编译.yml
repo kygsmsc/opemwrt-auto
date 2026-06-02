@@ -27,6 +27,7 @@ on:
           - immortalwrt-master
           - Lienol-master
           - istoreos-master
+          - kygs-openwrt
       banben:
         description: "请选择OPENWRT的分支版本"
         required: false
@@ -117,6 +118,11 @@ jobs:
             REPO_BRANCH="master"
             #BAN_VERS="${{inputs.banben}}"
             TAGS_NAME="istoreos"
+        elif [[ "${{ inputs.source_branch }}" == *"kygs-openwrt"* ]]; then
+            REPO_URL="https://github.com/kygsmsc/immortalwrt.git"
+            REPO_BRANCH="master"
+            #BAN_VERS="${{inputs.banben}}"
+            TAGS_NAME="Immortalwrt"
         else
             echo "未知的源代码存储库."
               exit 1
