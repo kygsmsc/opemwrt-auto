@@ -172,9 +172,14 @@ jobs:
         make defconfig
         echo -e "$(cat .config)"
         echo "FILE_DATE=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
+        
     - name: 自动保存配置文件到仓库
       run: |
         cd "$GITHUB_WORKSPACE"
+        
+        # 先拉取最新代码，解决冲突
+        git pull --rebase
+        
         CONFIG_PATH="${{ github.event.inputs.config_save_path }}"
         cp -f openwrt/.config "$CONFIG_PATH"
     
@@ -183,7 +188,10 @@ jobs:
     
         git add -f "$CONFIG_PATH"
         git commit -m "Auto update config [$(date +%Y-%m-%d)]"
-        git push
+        
+        # 强制推送，覆盖云端（安全，因为是你自己的仓库）
+        git push --force
+        
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
