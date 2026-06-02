@@ -172,29 +172,20 @@ jobs:
         make defconfig
         echo -e "$(cat .config)"
         echo "FILE_DATE=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
-
     - name: 自动保存配置文件到仓库
       run: |
-        # 1. 确保在仓库根目录
         cd "$GITHUB_WORKSPACE"
-    
-        # 2. 获取保存路径
         CONFIG_PATH="${{ github.event.inputs.config_save_path }}"
-    
-        # 3. 复制配置文件
         cp -f openwrt/.config "$CONFIG_PATH"
     
-        # 4. Git 身份设置
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
     
-        # 5. 添加、提交、推送（强制提交，确保一定上传）
         git add -f "$CONFIG_PATH"
-        git commit -m "Auto update OpenWrt config [$(date +%Y-%m-%d)]"
+        git commit -m "Auto update config [$(date +%Y-%m-%d)]"
         git push
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 
     - name: 下载编译依赖
       run: |
