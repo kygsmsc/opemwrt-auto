@@ -12,17 +12,19 @@ on:
   workflow_dispatch:
     inputs:
       source_branch:
-        description: "请选择OPENWRT的分支"
+        description: "选择 OpenWrt 源码仓库"
         required: false
         default: "openwrt-main"
         type: choice
         options:
-          - openwrt-main
-          - lede-master
-          - immortalwrt-master
-          - Lienol-master
-          - istoreos-master
-          - kygs-openwrt
+          - lede-master               # LEDE 官方 (coolsnowwolf)
+          - openwrt-main              # OpenWrt 官方 main
+          - openwrt-24.10             # OpenWrt 24.10 稳定版
+          - openwrt-23.05             # OpenWrt 23.05 稳定版
+          - immortalwrt-master        # ImmortalWrt 最新
+          - immortalwrt-24.10         # ImmortalWrt 24.10
+          - istoreos-master           # iStoreOS 最新
+          - kygs-immortalwrt-master   # 你的私人仓库：kygsmsc/immortalwrt
           
       banben:
         description: "请选择OPENWRT的分支版本"
