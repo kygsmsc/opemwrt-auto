@@ -127,8 +127,7 @@ jobs:
 
     - name: 加载 feeds 配置
       run: |
-        cd openwrt
-        [ -e $FEEDS_CONF ] && cp -f $FEEDS_CONF feeds.conf.default
+        [ -e $FEEDS_CONF ] && cp -f $FEEDS_CONF openwrt/feeds.conf.default || true
 
     - name: 执行自定义脚本1
       run: |
