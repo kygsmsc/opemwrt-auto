@@ -75,100 +75,53 @@ jobs:
 
   
   
-jobs:
-  build:
-    runs-on: ubuntu-22.04
 
-    steps:
-    - name: 查看
-      uses: actions/checkout@main
-
-    - name: 初始化环境
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-       
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-        sudo docker image prune --all --force
-        sudo -E apt-get -qq update
-        # sudo -E apt -qy install $(curl -fsSL https://raw.githubusercontent.com/Plutonium141/openwrt-depends-ubuntu/main/ubuntu)
-        sudo -E apt -y install $(curl -fsSL https://is.gd/depend_ubuntu_2204_openwrt)
-        # sudo -E apt-get -qq install $(curl -fsSL https://is.gd/depends_ubuntu_2204)
-        # sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
-        sudo -E apt-get -qq autoremove --purge
-        sudo -E systemctl daemon-reload
-        sudo -E apt-get -qq  clean && sudo -E apt-get -qq autoclean
-        sudo timedatectl set-timezone "$TZ"
-        sudo mkdir -p /builder
-        sudo chown $USER:$GROUPS /builder
         
-    - name: 创建模拟物理磁盘
-      id: disk
+    - name: 自动匹配仓库地址与分支
+      id: repo
       run: |
-          mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
-          root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
-          sudo truncate -s "${mnt_size}"G /mnt/mnt.img
-          sudo truncate -s "${root_size}"G /root.img
-          sudo losetup /dev/loop6 /mnt/mnt.img
-          sudo losetup /dev/loop7 /root.img
-          sudo pvcreate /dev/loop6
-          sudo pvcreate /dev/loop7
-          sudo vgcreate github /dev/loop6 /dev/loop7
-          sudo lvcreate -n runner -l 100%FREE github
-          sudo mkfs.xfs /dev/github/runner
-          sudo mkdir -p /builder
-          sudo mount /dev/github/runner /builder
-          sudo chown -R runner.runner /builder
-          df -Th $PWD
-
-    - name: 克隆源代码 [ ${{ inputs.source_branch }} ][${{inputs.banben}}]
-      working-directory: /builder
-      run: |
-        df -hT $PWD
-        # Set up compilation source code
-        if [[ "${{ inputs.source_branch }}" == *"openwrt"* ]]; then
-            REPO_URL="https://github.com/openwrt/openwrt"
-            REPO_BRANCH="main"
-            #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="OpenWrt"
-        elif [[ "${{ inputs.source_branch }}" == *"lede"* ]]; then
+        case "${{ github.event.inputs.source_repo }}" in
+          lede-master)
             REPO_URL="https://github.com/coolsnowwolf/lede"
             REPO_BRANCH="master"
-            #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="LEDE"
-        elif [[ "${{ inputs.source_branch }}" == *"immortalwrt"* ]]; then
-            REPO_URL="https://github.com/immortalwrt/immortalwrt.git"
-            REPO_BRANCH="master"
-            #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="Immortalwrt"
-        elif [[ "${{ inputs.source_branch }}" == *"Lienol"* ]]; then
-            REPO_URL="https://github.com/Lienol/openwrt"
+            ;;
+          openwrt-main)
+            REPO_URL="https://github.com/openwrt/openwrt"
             REPO_BRANCH="main"
-            #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="Lienol"
-        elif [[ "${{ inputs.source_branch }}" == *"istoreos"* ]]; then
-            REPO_URL="https://github.com/istoreos/istoreos"
+            ;;
+          openwrt-24.10)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="openwrt-24.10"
+            ;;
+          openwrt-23.05)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="openwrt-23.05"
+            ;;
+          immortalwrt-master)
+            REPO_URL="https://github.com/immortalwrt/immortalwrt"
             REPO_BRANCH="master"
-            #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="istoreos"
-        elif [[ "${{ inputs.source_branch }}" == *"kygs-openwrt"* ]]; then
+            ;;
+          immortalwrt-24.10)
+            REPO_URL="https://github.com/immortalwrt/immortalwrt"
+            REPO_BRANCH="openwrt-24.10"
+            ;;
+          istoreos-master)
+            REPO_URL="https://github.com/istoreos/istoreos"
+            REPO_BRANCH="main"
+            ;;
+          kygs-immortalwrt-master)
             REPO_URL="https://github.com/kygsmsc/immortalwrt"
             REPO_BRANCH="master"
-            #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="kygs-openwrt"
-        else
-            echo "未知的源代码存储库."
-              exit 1
-          fi
-        # Clone source code
-        # git clone -q --single-branch --depth=1 --branch=${REPO_BRANCH} ${REPO_URL} openwrt
-        git clone ${REPO_URL} -b ${REPO_BRANCH} openwrt
-        ln -sf /builder/openwrt $GITHUB_WORKSPACE/openwrt
-        echo "FILE_NAME=${TAGS_NAME}_" >> $GITHUB_ENV
-        echo "REPO_URL=${REPO_URL}" >> ${GITHUB_OUTPUT}
-        echo "TAGS_NAME=${TAGS_NAME}" >> ${GITHUB_OUTPUT}
-        echo "status=success" >> ${GITHUB_OUTPUT}
-
+            ;;
+          *)
+            echo "错误：未定义的仓库"
+            exit 1
+            ;;
+        esac
+        echo "REPO_URL=$REPO_URL" >> $GITHUB_OUTPUT
+        echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_OUTPUT
+        
+    
     - name: 切换OPENWRT的分支
       run: |
         cd openwrt
