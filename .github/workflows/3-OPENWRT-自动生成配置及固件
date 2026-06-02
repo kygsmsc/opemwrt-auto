@@ -136,5 +136,196 @@ jobs:
         echo " 使用分支：$REPO_BRANCH"
         echo " 选定版本：$VERSION_TAG"
         echo "====================================="
+        
+    - name: 加载 feeds 配置
+      run: |
+        cd openwrt
+        [ -e ../$FEEDS_CONF ] && cp -f ../$FEEDS_CONF feeds.conf.default
+
+    - name: 执行自定义脚本1
+      run: |
+        chmod +x ../$DIY_P1_SH
+        cd openwrt
+        ../$DIY_P1_SH
+
+    - name: 更新 & 安装 feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: 加载 .config 配置
+      run: |
+        cd openwrt
+        [ -e ../$CONFIG_FILE ] && cp -f ../$CONFIG_FILE .config
+
+    - name: 执行自定义脚本2
+      run: |
+        chmod +x ../$DIY_P2_SH
+        cd openwrt
+        ../$DIY_P2_SH
+
+    # ==================== SSH 连接功能已恢复 ====================
+    - name: SSH 远程连接
+      if: github.event.inputs.ssh == 'true'
+      uses: rdp-studio/ssh2actions@main
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    - name: 生成默认配置
+      run: |
+        cd openwrt
+        make defconfig
+        echo "FILE_DATE=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
+
+    - name: 打包配置文件
+      run: |
+        cd openwrt
+        mkdir -p output
+        cp -f .config output/config
+
+    - name: 上传配置文件
+      uses: actions/upload-artifact@main
+      with:
+        name: OpenWrt_Config_${{ env.FILE_DATE }}
+        path: openwrt/output#============================================================================================
+# https://github.com/P3TERX/Actions-OpenWrt
+# https://github.com/ophub/amlogic-s9xxx-openwrt
+# https://github.com/3wlh/Actions-OpenWrt
+# Description: Build OpenWrt
+#============================================================================================
+
+name: 3-OPENWRT-自动生成配置及固件
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: "选择 OpenWrt 源码仓库"
+        required: true
+        default: "lede-master"
+        type: choice
+        options:
+          - lede-master               # LEDE 官方 (coolsnowwolf)
+          - openwrt-main              # OpenWrt 官方 main
+          - openwrt-24.10             # OpenWrt 24.10 稳定版
+          - openwrt-23.05             # OpenWrt 23.05 稳定版
+          - immortalwrt-master        # ImmortalWrt 最新
+          - immortalwrt-24.10         # ImmortalWrt 24.10
+          - istoreos-master           # iStoreOS 最新
+          - kygs-immortalwrt-master   # 你的私人仓库：kygsmsc/immortalwrt
+          
+      version_tag:
+        description: "选择源码版本 Tag（ latest = 最新代码）"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - v24.10.0
+          - v24.10.1
+          - v23.05.0
+          - v23.05.1
+          - v23.05.2
+          - v23.05.3
+          - v23.05.4
+        
+      ssh:
+        description: "启用 SSH 连接（可在线 make menuconfig）"
+        required: false
+        default: true
+        type: boolean
+     
+
+env:
+  FEEDS_CONF: feeds.conf.default
+  CONFIG_FILE: .config
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
+  UPLOAD_BIN_DIR: false
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
+  TZ: Asia/Shanghai
+  UPLOAD_CONFIG: true
+  
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@main
+
+    - name: 安装系统依赖
+      run: |
+        sudo apt update -y
+        sudo apt install -y build-essential cmake flex bison gawk gcc-multilib g++-multilib \
+        libncurses5-dev python2 python3 git wget curl zip unzip bzip2 p7zip-full rsync file \
+        gettext libssl-dev libelf-dev autopoint libtool-bin perl findutils grep libreadline-dev
+        sudo timedatectl set-timezone "$TZ"
+        
+    - name: 自动匹配仓库地址与分支
+      id: repo
+      run: |
+        case "${{ github.event.inputs.source_repo }}" in
+          lede-master)
+            REPO_URL="https://github.com/coolsnowwolf/lede"
+            REPO_BRANCH="master"
+            ;;
+          openwrt-main)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="main"
+            ;;
+          openwrt-24.10)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="openwrt-24.10"
+            ;;
+          openwrt-23.05)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="openwrt-23.05"
+            ;;
+          immortalwrt-master)
+            REPO_URL="https://github.com/immortalwrt/immortalwrt"
+            REPO_BRANCH="master"
+            ;;
+          immortalwrt-24.10)
+            REPO_URL="https://github.com/immortalwrt/immortalwrt"
+            REPO_BRANCH="openwrt-24.10"
+            ;;
+          istoreos-master)
+            REPO_URL="https://github.com/istoreos/istoreos"
+            REPO_BRANCH="main"
+            ;;
+          kygs-immortalwrt-master)
+            REPO_URL="https://github.com/kygsmsc/immortalwrt"
+            REPO_BRANCH="master"
+            ;;
+          *)
+            echo "错误：未定义的仓库"
+            exit 1
+            ;;
+        esac
+        echo "REPO_URL=$REPO_URL" >> $GITHUB_OUTPUT
+        echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_OUTPUT
+           
+    - name: 克隆源码并自动切换版本 Tag
+      run: |
+        REPO_URL="${{ steps.repo.outputs.REPO_URL }}"
+        REPO_BRANCH="${{ steps.repo.outputs.REPO_BRANCH }}"
+        VERSION_TAG="${{ github.event.inputs.version_tag }}"
+        
+        git clone -b $REPO_BRANCH $REPO_URL openwrt
+        cd openwrt
+        
+        if [ "$VERSION_TAG" != "latest" ]; then
+          git fetch --tags 2>/dev/null || true
+          git checkout $VERSION_TAG 2>/dev/null || echo "ℹ️ Tag 不存在，使用当前分支最新代码"
+        fi
+        
+        echo "====================================="
+        echo " 源码仓库：$REPO_URL"
+        echo " 使用分支：$REPO_BRANCH"
+        echo " 选定版本：$VERSION_TAG"
+        echo "====================================="
 
 
