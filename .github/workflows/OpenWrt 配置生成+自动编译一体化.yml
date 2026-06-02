@@ -2,7 +2,7 @@
 # https://github.com/P3TERX/Actions-OpenWrt
 # https://github.com/ophub/amlogic-s9xxx-openwrt
 # https://github.com/3wlh/Actions-OpenWrt
-# Description: Build OpenWrt
+# openwrt:一体化工作流
 #============================================================================================
 
 name: OpenWrt 配置生成+自动编译一体化
