@@ -1,94 +1,226 @@
 #============================================================================================
 # https://github.com/P3TERX/Actions-OpenWrt
-# Description: OpenWrt 配置生成工具（自动分支 + 可视化版本 + SSH 连接）
+# https://github.com/ophub/amlogic-s9xxx-openwrt
+# https://github.com/3wlh/Actions-OpenWrt
+# Description: Build OpenWrt
 #============================================================================================
-name: OpenWrt 配置生成工具
+
+name: 1.OpenWrt-配置生成工具
+
 on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
-      source_repo:
-        description: "选择 OpenWrt 源码仓库"
-        required: true
-        default: "lede-master"
+      source_branch:
+        description: "请选择OPENWRT的分支"
+        required: false
+        default: "openwrt-main"
         type: choice
         options:
-          - lede-master               # LEDE 官方 (coolsnowwolf)
-          - openwrt-main              # OpenWrt 官方 main
-          - openwrt-24.10             # OpenWrt 24.10 稳定版
-          - openwrt-23.05             # OpenWrt 23.05 稳定版
-          - immortalwrt-master        # ImmortalWrt 最新
-          - immortalwrt-24.10         # ImmortalWrt 24.10
-          - istoreos-master           # iStoreOS 最新
-          - kygs-immortalwrt-master   # 你的私人仓库：kygsmsc/immortalwrt
-      version_tag:
-        description: "选择源码版本 Tag（ latest = 最新代码）"
-        required: true
-        default: "latest"
-        type: choice
-        options:
-          - latest
-          - v24.10.0
-          - v24.10.1
-          - v23.05.0
-          - v23.05.1
-          - v23.05.2
-          - v23.05.3
-          - v23.05.4
-      
-env:
-  FEEDS_CONF: "feeds.conf.default"
-  CONFIG_FILE: ".config"
-  DIY_P1_SH: "diy-part1.sh"
-  DIY_P2_SH: "diy-part2.sh"
-  UPLOAD_BIN_DIR: "false"
-  UPLOAD_FIRMWARE: "true"
-  UPLOAD_RELEASE: "true"
-  TZ: "Asia/Shanghai"
-  UPLOAD_CONFIG: "true"
+          - openwrt-main
+          - lede-master
+          - immortalwrt-master
+          - Lienol-master
+          - istoreos-master
+          - kygs-openwrt
+          
+      banben:
+        description: "请选择OPENWRT的分支版本"
+        required: false
+        default: "master"
+        type: text
+        
+      ssh:
+        description: "SSH定制固件配置"
+        required: false
+        default: true
+        type: boolean
+        #type: Object
+     
 
+env:
+  # FEEDS_CONF: feeds/${{ inputs.source_branch }}/feeds.conf.default
+  FEEDS_CONF: feeds.conf.default
+  CONFIG_FILE: .config
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
+  UPLOAD_BIN_DIR: false
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
+  TZ: Asia/Shanghai
+  UPLOAD_CONFIG: true
+
+  
+  
 jobs:
   build:
-    runs-on: "ubuntu-22.04"  # 显式标注为字符串
+    runs-on: ubuntu-22.04
+
     steps:
-    - uses: "actions/checkout@main"
+    - name: 查看
+      uses: actions/checkout@main
 
-    - name: 安装系统依赖
+    - name: 初始化环境
+      env:
+        DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo apt update -y
-        sudo apt install -y build-essential cmake flex bison gawk gcc-multilib g++-multilib \
-        libncurses5-dev python2 python3 git wget curl zip unzip bzip2 p7zip-full rsync file \
-        gettext libssl-dev libelf-dev autopoint libtool-bin perl findutils grep libreadline-dev
+       
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        sudo docker image prune --all --force
+        sudo -E apt-get -qq update
+        # sudo -E apt -qy install $(curl -fsSL https://raw.githubusercontent.com/Plutonium141/openwrt-depends-ubuntu/main/ubuntu)
+        sudo -E apt -y install $(curl -fsSL https://is.gd/depend_ubuntu_2204_openwrt)
+        # sudo -E apt-get -qq install $(curl -fsSL https://is.gd/depends_ubuntu_2204)
+        # sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+        sudo -E apt-get -qq autoremove --purge
+        sudo -E systemctl daemon-reload
+        sudo -E apt-get -qq  clean && sudo -E apt-get -qq autoclean
         sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /builder
+        sudo chown $USER:$GROUPS /builder
+        
+    - name: 创建模拟物理磁盘
+      id: disk
+      run: |
+          mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
+          root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
+          sudo truncate -s "${mnt_size}"G /mnt/mnt.img
+          sudo truncate -s "${root_size}"G /root.img
+          sudo losetup /dev/loop6 /mnt/mnt.img
+          sudo losetup /dev/loop7 /root.img
+          sudo pvcreate /dev/loop6
+          sudo pvcreate /dev/loop7
+          sudo vgcreate github /dev/loop6 /dev/loop7
+          sudo lvcreate -n runner -l 100%FREE github
+          sudo mkfs.xfs /dev/github/runner
+          sudo mkdir -p /builder
+          sudo mount /dev/github/runner /builder
+          sudo chown -R runner.runner /builder
+          df -Th $PWD
 
-    
-    
-    - name: 加载 feeds 配置
+    - name: 克隆源代码 [ ${{ inputs.source_branch }} ][${{inputs.banben}}]
+      working-directory: /builder
+      run: |
+        df -hT $PWD
+        # Set up compilation source code
+        if [[ "${{ inputs.source_branch }}" == *"openwrt"* ]]; then
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="main"
+            #BAN_VERS="${{inputs.banben}}"
+            TAGS_NAME="OpenWrt"
+        elif [[ "${{ inputs.source_branch }}" == *"lede"* ]]; then
+            REPO_URL="https://github.com/coolsnowwolf/lede"
+            REPO_BRANCH="master"
+            #BAN_VERS="${{inputs.banben}}"
+            TAGS_NAME="LEDE"
+        elif [[ "${{ inputs.source_branch }}" == *"immortalwrt"* ]]; then
+            REPO_URL="https://github.com/immortalwrt/immortalwrt.git"
+            REPO_BRANCH="master"
+            #BAN_VERS="${{inputs.banben}}"
+            TAGS_NAME="Immortalwrt"
+        elif [[ "${{ inputs.source_branch }}" == *"Lienol"* ]]; then
+            REPO_URL="https://github.com/Lienol/openwrt"
+            REPO_BRANCH="main"
+            #BAN_VERS="${{inputs.banben}}"
+            TAGS_NAME="Lienol"
+        elif [[ "${{ inputs.source_branch }}" == *"istoreos"* ]]; then
+            REPO_URL="https://github.com/istoreos/istoreos"
+            REPO_BRANCH="master"
+            #BAN_VERS="${{inputs.banben}}"
+            TAGS_NAME="istoreos"
+        elif [[ "${{ inputs.source_branch }}" == *"kygs-openwrt"* ]]; then
+            REPO_URL="https://github.com/kygsmsc/immortalwrt"
+            REPO_BRANCH="master"
+            #BAN_VERS="${{inputs.banben}}"
+            TAGS_NAME="kygs-openwrt"
+        else
+            echo "未知的源代码存储库."
+              exit 1
+          fi
+        # Clone source code
+        # git clone -q --single-branch --depth=1 --branch=${REPO_BRANCH} ${REPO_URL} openwrt
+        git clone ${REPO_URL} -b ${REPO_BRANCH} openwrt
+        ln -sf /builder/openwrt $GITHUB_WORKSPACE/openwrt
+        echo "FILE_NAME=${TAGS_NAME}_" >> $GITHUB_ENV
+        echo "REPO_URL=${REPO_URL}" >> ${GITHUB_OUTPUT}
+        echo "TAGS_NAME=${TAGS_NAME}" >> ${GITHUB_OUTPUT}
+        echo "status=success" >> ${GITHUB_OUTPUT}
+
+    - name: 切换OPENWRT的分支
       run: |
         cd openwrt
-        [ -e "../$FEEDS_CONF" ] && cp -f "../$FEEDS_CONF" feeds.conf.default
-
-    - name: 执行自定义脚本1
+        #git fetch --tags --all  # 拉取所有标签和远程分支
+        git tag    # 你可以查看所有可用的版本
+        git branch -a  # 查看当前使用的版本
+        git checkout ${{inputs.banben}}   # 切换到指定的版本
+        git branch -a  # 查看当前使用的版本
+        
+    - name: 加载自定义提要
       run: |
-        chmod +x "../$DIY_P1_SH"
+        rm -rf tmp
+        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+        chmod +x $DIY_P1_SH
         cd openwrt
-        ../"$DIY_P1_SH"
+        $GITHUB_WORKSPACE/$DIY_P1_SH
 
-    - name: 更新 & 安装 feeds
+    - name: 更新 feeds
+      run: cd openwrt && ./scripts/feeds update -a
+
+    - name: 安装 feeds
+      run: cd openwrt && ./scripts/feeds install -a
+
+    #- name: 再次更新 feeds
+     # run: cd openwrt && ./scripts/feeds update -i -f
+
+    #- name: 再次安装 feeds
+     # run: cd openwrt && ./scripts/feeds install -a -f
+      
+    - name: 加载自定义配置
+      run: |
+        [ -e files ] && mv files openwrt/files
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        chmod +x $DIY_P2_SH
+        cd openwrt
+        $GITHUB_WORKSPACE/$DIY_P2_SH
+
+     #- name: SSH连接 (cd openwrt && make menuconfig )
+      #if: (inputs.ssh == true) || contains(github.event.action, 'ssh')
+      #uses: rdp-studio/ssh2actions@main
+      #env:
+        #TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        #TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+                
+    - name: SSH连接 (cd openwrt && make menuconfig )
+      if: (inputs.ssh == true) || contains(github.event.action, 'ssh')
+      #uses: mxschmitt/action-tmate@v3
+      uses: rdp-studio/ssh2actions@main
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    - name: 下载配置
+      id: config
       run: |
         cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
-
-    - name: 加载 .config 配置
+        make defconfig
+        echo -e "$(cat .config)"
+        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+      
+    - name: 整理文件
+      id: files
       run: |
         cd openwrt
-        [ -e "../$CONFIG_FILE" ] && cp -f "../$CONFIG_FILE" .config
+        [[ -d "Output" ]] || mkdir Output
+        cp -f .config Output/config
+        echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: 执行自定义脚本2
-      run: |
-        chmod +x "../$DIY_P2_SH"
-        cd openwrt
-        ../"$DIY_P2_SH"
+    - name: 检查空间使用情况
+      if: (!cancelled())
+      run: df -hT
 
-
+    - name: 上传配置目录
+      uses: actions/upload-artifact@main
+      if: env.UPLOAD_CONFIG == 'true' && !cancelled()
+      with:
+        name: ${{ env.FILE_NAME }}Config${{ env.FILE_DATE }}
+        path: openwrt/Output
