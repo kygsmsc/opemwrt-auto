@@ -3,7 +3,7 @@
 # https://github.com/ophub/amlogic-s9xxx-openwrt
 # https://github.com/3wlh/Actions-OpenWrt
 # openwrt:一体化工作流
-# 功能:选择源码-生成配置-自动保存到仓库→全自动编译固件→发布Release
+# 功能:选择源码→生成配置→自动保存到仓库→全自动编译固件→发布Release
 #============================================================================================
 
 name: OpenWrt 配置生成+自动编译一体化
