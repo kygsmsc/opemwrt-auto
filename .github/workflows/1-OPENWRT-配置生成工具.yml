@@ -13,7 +13,7 @@ on:
     inputs:
       source_branch:
         description: "选择 OpenWrt 源码仓库"
-        required: false
+        required: true
         default: "openwrt-main"
         type: choice
         options:
