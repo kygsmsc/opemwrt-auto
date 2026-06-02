@@ -38,25 +38,25 @@ on:
       ssh:
         description: "启用 SSH 连接（可在线 make menuconfig）"
         required: false
-        default: true
+        default: true  # boolean 类型默认值小写（此处GitHub会自动兼容，但显式小写更规范）
         type: boolean
 
 env:
-  FEEDS_CONF: feeds.conf.default
-  CONFIG_FILE: .config
-  DIY_P1_SH: diy-part1.sh
-  DIY_P2_SH: diy-part2.sh
-  UPLOAD_BIN_DIR: false
-  UPLOAD_FIRMWARE: true
-  UPLOAD_RELEASE: true
-  TZ: Asia/Shanghai
-  UPLOAD_CONFIG: true
+  FEEDS_CONF: "feeds.conf.default"
+  CONFIG_FILE: ".config"
+  DIY_P1_SH: "diy-part1.sh"
+  DIY_P2_SH: "diy-part2.sh"
+  UPLOAD_BIN_DIR: "false"
+  UPLOAD_FIRMWARE: "true"
+  UPLOAD_RELEASE: "true"
+  TZ: "Asia/Shanghai"
+  UPLOAD_CONFIG: "true"
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: "ubuntu-22.04"  # 显式标注为字符串
     steps:
-    - uses: actions/checkout@main
+    - uses: "actions/checkout@main"
 
     - name: 安装系统依赖
       run: |
@@ -107,8 +107,8 @@ jobs:
             exit 1
             ;;
         esac
-        echo "REPO_URL=$REPO_URL" >> $GITHUB_OUTPUT
-        echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_OUTPUT
+        echo "REPO_URL=$REPO_URL" >> "$GITHUB_OUTPUT"
+        echo "REPO_BRANCH=$REPO_BRANCH" >> "$GITHUB_OUTPUT"
 
     - name: 克隆源码并自动切换版本 Tag
       run: |
@@ -116,12 +116,12 @@ jobs:
         REPO_BRANCH="${{ steps.repo.outputs.REPO_BRANCH }}"
         VERSION_TAG="${{ github.event.inputs.version_tag }}"
         
-        git clone -b $REPO_BRANCH $REPO_URL openwrt
+        git clone -b "$REPO_BRANCH" "$REPO_URL" openwrt
         cd openwrt
         
         if [ "$VERSION_TAG" != "latest" ]; then
           git fetch --tags 2>/dev/null || true
-          git checkout $VERSION_TAG 2>/dev/null || echo "ℹ️ Tag 不存在，使用当前分支最新代码"
+          git checkout "$VERSION_TAG" 2>/dev/null || echo "ℹ️ Tag 不存在，使用当前分支最新代码"
         fi
         
         echo "====================================="
@@ -133,13 +133,13 @@ jobs:
     - name: 加载 feeds 配置
       run: |
         cd openwrt
-        [ -e ../$FEEDS_CONF ] && cp -f ../$FEEDS_CONF feeds.conf.default
+        [ -e "../$FEEDS_CONF" ] && cp -f "../$FEEDS_CONF" feeds.conf.default
 
     - name: 执行自定义脚本1
       run: |
-        chmod +x ../$DIY_P1_SH
+        chmod +x "../$DIY_P1_SH"
         cd openwrt
-        ../$DIY_P1_SH
+        ../"$DIY_P1_SH"
 
     - name: 更新 & 安装 feeds
       run: |
@@ -150,27 +150,27 @@ jobs:
     - name: 加载 .config 配置
       run: |
         cd openwrt
-        [ -e ../$CONFIG_FILE ] && cp -f ../$CONFIG_FILE .config
+        [ -e "../$CONFIG_FILE" ] && cp -f "../$CONFIG_FILE" .config
 
     - name: 执行自定义脚本2
       run: |
-        chmod +x ../$DIY_P2_SH
+        chmod +x "../$DIY_P2_SH"
         cd openwrt
-        ../$DIY_P2_SH
+        ../"$DIY_P2_SH"
 
     # ==================== SSH 连接功能已恢复 ====================
     - name: SSH 远程连接
-      if: github.event.inputs.ssh == 'true'
-      uses: rdp-studio/ssh2actions@main
+      if: ${{ github.event.inputs.ssh == true }}  # boolean 类型判断无需引号
+      uses: "rdp-studio/ssh2actions@main"
       env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        TELEGRAM_BOT_TOKEN: "${{ secrets.TELEGRAM_BOT_TOKEN }}"
+        TELEGRAM_CHAT_ID: "${{ secrets.TELEGRAM_CHAT_ID }}"
 
     - name: 生成默认配置
       run: |
         cd openwrt
         make defconfig
-        echo "FILE_DATE=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
+        echo "FILE_DATE=$(date +%Y%m%d%H%M)" >> "$GITHUB_ENV"
 
     - name: 打包配置文件
       run: |
@@ -179,7 +179,7 @@ jobs:
         cp -f .config output/config
 
     - name: 上传配置文件
-      uses: actions/upload-artifact@main
+      uses: "actions/upload-artifact@main"
       with:
-        name: OpenWrt_Config_${{ env.FILE_DATE }}
-        path: openwrt/output
+        name: "OpenWrt_Config_${{ env.FILE_DATE }}"
+        path: "openwrt/output"
