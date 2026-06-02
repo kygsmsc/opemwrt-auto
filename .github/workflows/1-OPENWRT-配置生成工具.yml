@@ -116,83 +116,77 @@ jobs:
         esac
         echo "REPO_URL=$REPO_URL" >> $GITHUB_OUTPUT
         echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_OUTPUT
+           
+    - name: 克隆源码并自动切换版本 Tag
+      run: |
+        REPO_URL="${{ steps.repo.outputs.REPO_URL }}"
+        REPO_BRANCH="${{ steps.repo.outputs.REPO_BRANCH }}"
+        VERSION_TAG="${{ github.event.inputs.version_tag }}"
         
-    
-    - name: 切换OPENWRT的分支
-      run: |
+        git clone -b $REPO_BRANCH $REPO_URL openwrt
         cd openwrt
-        #git fetch --tags --all  # 拉取所有标签和远程分支
-        git tag    # 你可以查看所有可用的版本
-        git branch -a  # 查看当前使用的版本
-        git checkout ${{inputs.banben}}   # 切换到指定的版本
-        git branch -a  # 查看当前使用的版本
         
-    - name: 加载自定义提要
+        if [ "$VERSION_TAG" != "latest" ]; then
+          git fetch --tags 2>/dev/null || true
+          git checkout $VERSION_TAG 2>/dev/null || echo "ℹ️ Tag 不存在，使用当前分支最新代码"
+        fi
+        
+        echo "====================================="
+        echo " 源码仓库：$REPO_URL"
+        echo " 使用分支：$REPO_BRANCH"
+        echo " 选定版本：$VERSION_TAG"
+        echo "====================================="
+        
+    - name: 加载 feeds 配置
       run: |
-        rm -rf tmp
-        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
-        chmod +x $DIY_P1_SH
         cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
+        [ -e ../$FEEDS_CONF ] && cp -f ../$FEEDS_CONF feeds.conf.default
 
-    - name: 更新 feeds
-      run: cd openwrt && ./scripts/feeds update -a
-
-    - name: 安装 feeds
-      run: cd openwrt && ./scripts/feeds install -a
-
-    #- name: 再次更新 feeds
-     # run: cd openwrt && ./scripts/feeds update -i -f
-
-    #- name: 再次安装 feeds
-     # run: cd openwrt && ./scripts/feeds install -a -f
-      
-    - name: 加载自定义配置
+    - name: 执行自定义脚本1
       run: |
-        [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x $DIY_P2_SH
+        chmod +x ../$DIY_P1_SH
         cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P2_SH
+        ../$DIY_P1_SH
 
-     #- name: SSH连接 (cd openwrt && make menuconfig )
-      #if: (inputs.ssh == true) || contains(github.event.action, 'ssh')
-      #uses: rdp-studio/ssh2actions@main
-      #env:
-        #TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        #TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-                
-    - name: SSH连接 (cd openwrt && make menuconfig )
-      if: (inputs.ssh == true) || contains(github.event.action, 'ssh')
-      #uses: mxschmitt/action-tmate@v3
+    - name: 更新 & 安装 feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: 加载 .config 配置
+      run: |
+        cd openwrt
+        [ -e ../$CONFIG_FILE ] && cp -f ../$CONFIG_FILE .config
+
+    - name: 执行自定义脚本2
+      run: |
+        chmod +x ../$DIY_P2_SH
+        cd openwrt
+        ../$DIY_P2_SH
+
+    # ==================== SSH 连接功能已恢复 ====================
+    - name: SSH 远程连接
+      if: github.event.inputs.ssh == 'true'
       uses: rdp-studio/ssh2actions@main
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
-    - name: 下载配置
-      id: config
+    - name: 生成默认配置
       run: |
         cd openwrt
         make defconfig
-        echo -e "$(cat .config)"
-        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
-      
-    - name: 整理文件
-      id: files
+        echo "FILE_DATE=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
+
+    - name: 打包配置文件
       run: |
         cd openwrt
-        [[ -d "Output" ]] || mkdir Output
-        cp -f .config Output/config
-        echo "status=success" >> $GITHUB_OUTPUT
+        mkdir -p output
+        cp -f .config output/config
 
-    - name: 检查空间使用情况
-      if: (!cancelled())
-      run: df -hT
-
-    - name: 上传配置目录
+    - name: 上传配置文件
       uses: actions/upload-artifact@main
-      if: env.UPLOAD_CONFIG == 'true' && !cancelled()
       with:
-        name: ${{ env.FILE_NAME }}Config${{ env.FILE_DATE }}
-        path: openwrt/Output
+        name: OpenWrt_Config_${{ env.FILE_DATE }}
+        path: openwrt/output
