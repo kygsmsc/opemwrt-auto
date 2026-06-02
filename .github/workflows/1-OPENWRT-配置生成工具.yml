@@ -3,9 +3,8 @@
 # https://github.com/ophub/amlogic-s9xxx-openwrt
 # https://github.com/3wlh/Actions-OpenWrt
 # Description: Build OpenWrt
+# Description: OpenWrt 配置生成工具（自动分支 + 可视化版本 + SSH 连接）
 #============================================================================================
-
-name: 1.OpenWrt-配置生成工具
 
 on:
   repository_dispatch:
