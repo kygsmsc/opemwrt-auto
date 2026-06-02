@@ -67,26 +67,7 @@ jobs:
         sudo timedatectl set-timezone "$TZ"
 
     
-    - name: 克隆源码并自动切换版本 Tag
-      run: |
-        REPO_URL="${{ steps.repo.outputs.REPO_URL }}"
-        REPO_BRANCH="${{ steps.repo.outputs.REPO_BRANCH }}"
-        VERSION_TAG="${{ github.event.inputs.version_tag }}"
-        
-        git clone -b "$REPO_BRANCH" "$REPO_URL" openwrt
-        cd openwrt
-        
-        if [ "$VERSION_TAG" != "latest" ]; then
-          git fetch --tags 2>/dev/null || true
-          git checkout "$VERSION_TAG" 2>/dev/null || echo "ℹ️ Tag 不存在，使用当前分支最新代码"
-        fi
-        
-        echo "====================================="
-        echo " 源码仓库：$REPO_URL"
-        echo " 使用分支：$REPO_BRANCH"
-        echo " 选定版本：$VERSION_TAG"
-        echo "====================================="
-
+    
     - name: 加载 feeds 配置
       run: |
         cd openwrt
