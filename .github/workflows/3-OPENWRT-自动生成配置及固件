@@ -1,0 +1,193 @@
+#============================================================================================
+# OpenWrt 一体化工作流
+# 功能：选择源码 → 生成配置 → 自动保存到仓库 → 全自动编译固件 → 发布Release
+#============================================================================================
+name: OpenWrt 配置生成+自动编译一体化
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        description: "选择 OpenWrt 源码仓库"
+        required: true
+        default: "kygs-immortalwrt-master"
+        type: choice
+        options:
+          - lede-master
+          - openwrt-main
+          - openwrt-24.10
+          - openwrt-23.05
+          - immortalwrt-master
+          - immortalwrt-24.10
+          - istoreos-master
+          - kygs-immortalwrt-master
+      version_tag:
+        description: "选择源码版本 Tag（ latest = 最新代码）"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - v24.10.0
+          - v24.10.1
+          - v23.05.0
+          - v23.05.1
+          - v23.05.2
+          - v23.05.3
+          - v23.05.4
+      ssh:
+        description: "启用 SSH 连接（可在线 make menuconfig）"
+        required: false
+        default: false
+        type: boolean
+      config_save_path:
+        description: "配置文件保存到仓库的路径（默认即可）"
+        required: true
+        default: ".config"
+        type: text
+
+env:
+  FEEDS_CONF: feeds.conf.default
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
+  TZ: Asia/Shanghai
+  UPLOAD_RELEASE: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: 检出仓库代码
+      uses: actions/checkout@main
+      with:
+        persist-credentials: true
+
+    - name: 安装编译环境依赖
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo -E apt-get -qq update
+        sudo -E apt-get -qq install build-essential cmake flex bison gawk gcc-multilib g++-multilib libncurses5-dev python3 git wget curl zip unzip bzip2 p7zip-full rsync file gettext libssl-dev libelf-dev autopoint libtool-bin perl
+        sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /builder
+        sudo chown $USER:$GROUPS /builder
+
+    - name: 自动匹配仓库地址与分支
+      id: repo
+      run: |
+        case "${{ github.event.inputs.source_repo }}" in
+          lede-master)
+            REPO_URL="https://github.com/coolsnowwolf/lede"
+            REPO_BRANCH="master" ;;
+          openwrt-main)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="main" ;;
+          openwrt-24.10)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="openwrt-24.10" ;;
+          openwrt-23.05)
+            REPO_URL="https://github.com/openwrt/openwrt"
+            REPO_BRANCH="openwrt-23.05" ;;
+          immortalwrt-master)
+            REPO_URL="https://github.com/immortalwrt/immortalwrt"
+            REPO_BRANCH="master" ;;
+          immortalwrt-24.10)
+            REPO_URL="https://github.com/immortalwrt/immortalwrt"
+            REPO_BRANCH="openwrt-24.10" ;;
+          istoreos-master)
+            REPO_URL="https://github.com/istoreos/istoreos"
+            REPO_BRANCH="main" ;;
+          kygs-immortalwrt-master)
+            REPO_URL="https://github.com/kygsmsc/immortalwrt"
+            REPO_BRANCH="master" ;;
+          *)
+            echo "错误：未定义仓库" && exit 1 ;;
+        esac
+        echo "REPO_URL=$REPO_URL" >> $GITHUB_OUTPUT
+        echo "REPO_BRANCH=$REPO_BRANCH" >> $GITHUB_OUTPUT
+
+    - name: 克隆 OpenWrt 源码
+      working-directory: /builder
+      run: |
+        git clone -b ${{ steps.repo.outputs.REPO_BRANCH }} ${{ steps.repo.outputs.REPO_URL }} openwrt
+        ln -sf /builder/openwrt $GITHUB_WORKSPACE/openwrt
+        cd openwrt
+        if [ "${{ github.event.inputs.version_tag }}" != "latest" ]; then
+          git fetch --tags 2>/dev/null || true
+          git checkout ${{ github.event.inputs.version_tag }} 2>/dev/null || echo "使用分支最新代码"
+        fi
+
+    - name: 加载 feeds 配置
+      run: |
+        cd openwrt
+        [ -e ../$FEEDS_CONF ] && cp -f ../$FEEDS_CONF feeds.conf.default
+
+    - name: 执行自定义脚本1
+      run: |
+        chmod +x ../$DIY_P1_SH
+        cd openwrt && ../$DIY_P1_SH
+
+    - name: 更新并安装 feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: 执行自定义脚本2
+      run: |
+        chmod +x ../$DIY_P2_SH
+        cd openwrt && ../$DIY_P2_SH
+
+    - name: SSH 远程连接（可选）
+      if: github.event.inputs.ssh == 'true'
+      uses: rdp-studio/ssh2actions@main
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    - name: 生成 .config 配置文件
+      run: |
+        cd openwrt
+        make defconfig
+        echo "FILE_DATE=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
+
+    - name: 自动保存配置文件到仓库
+      run: |
+        CONFIG_PATH="${{ github.event.inputs.config_save_path }}"
+        cp openwrt/.config "$CONFIG_PATH"
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git add "$CONFIG_PATH"
+        git diff --quiet || git commit -m "Auto update OpenWrt config [$(date +%Y-%m-%d)]"
+        git push
+
+    - name: 下载编译依赖
+      run: |
+        cd openwrt
+        make download -j8
+        find dl -size -1024c -exec rm -f {} \;
+
+    - name: 开始编译固件
+      run: |
+        cd openwrt
+        make -j$(nproc) || make -j1 V=s
+        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+        echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        echo "FILE_TAG=$(date +%Y.%m.%d-%H%M)" >> $GITHUB_ENV
+
+    - name: 整理固件文件
+      id: organize
+      run: |
+        cd openwrt/bin/targets/*/*
+        rm -rf packages
+        echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
+
+    - name: 发布固件到 Release
+      uses: softprops/action-gh-release@master
+      with:
+        tag_name: ${{ env.FILE_TAG }}
+        name: OpenWrt 自动编译固件 ${{ env.FILE_TAG }}
+        files: ${{ env.FIRMWARE_PATH }}/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
