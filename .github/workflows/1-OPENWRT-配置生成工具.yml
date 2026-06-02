@@ -158,6 +158,14 @@ jobs:
         cd openwrt
         ../$DIY_P2_SH
 
+    # ==================== SSH 连接功能已恢复 ====================
+    - name: SSH 远程连接
+      if: github.event.inputs.ssh == 'true'
+      uses: rdp-studio/ssh2actions@main
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
     - name: 生成默认配置
       run: |
         cd openwrt
