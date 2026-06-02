@@ -20,9 +20,9 @@ on:
           - openwrt-main
           - lede-master
           - immortalwrt-master
-          - immortalwrt-mt798x-master
           - Lienol-master
           - istoreos-master
+          - kygs-openwrt
           
       banben:
         description: "请选择OPENWRT的分支版本"
@@ -118,11 +118,6 @@ jobs:
             REPO_BRANCH="master"
             #BAN_VERS="${{inputs.banben}}"
             TAGS_NAME="Immortalwrt"
-        elif [[ "${{ inputs.source_branch }}" == *"immortalwrt-mt798x"* ]]; then
-            REPO_URL="https://github.com/hanwckf/immortalwrt-mt798x.git"
-            REPO_BRANCH="master"
-            #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="Immortalwrt-mt798x"
         elif [[ "${{ inputs.source_branch }}" == *"Lienol"* ]]; then
             REPO_URL="https://github.com/Lienol/openwrt"
             REPO_BRANCH="main"
@@ -133,6 +128,11 @@ jobs:
             REPO_BRANCH="master"
             #BAN_VERS="${{inputs.banben}}"
             TAGS_NAME="istoreos"
+        elif [[ "${{ inputs.source_branch }}" == *"kygs-openwrt"* ]]; then
+            REPO_URL="https://github.com/kygsmsc/immortalwrt.git"
+            REPO_BRANCH="master"
+            #BAN_VERS="${{inputs.banben}}"
+            TAGS_NAME="kygs-openwrt"
         else
             echo "未知的源代码存储库."
               exit 1
