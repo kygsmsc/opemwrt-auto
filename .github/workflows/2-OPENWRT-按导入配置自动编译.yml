@@ -122,7 +122,7 @@ jobs:
             REPO_URL="https://github.com/kygsmsc/immortalwrt.git"
             REPO_BRANCH="master"
             #BAN_VERS="${{inputs.banben}}"
-            TAGS_NAME="Immortalwrt"
+            TAGS_NAME="kygs-openwrt"
         else
             echo "未知的源代码存储库."
               exit 1
