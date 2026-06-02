@@ -96,28 +96,4 @@ jobs:
         cd openwrt
         ../"$DIY_P2_SH"
 
-    # ==================== SSH 连接功能已恢复 ====================
-    - name: SSH 远程连接
-      if: ${{ github.event.inputs.ssh == true }}  # boolean 类型判断无需引号
-      uses: "rdp-studio/ssh2actions@main"
-      env:
-        TELEGRAM_BOT_TOKEN: "${{ secrets.TELEGRAM_BOT_TOKEN }}"
-        TELEGRAM_CHAT_ID: "${{ secrets.TELEGRAM_CHAT_ID }}"
 
-    - name: 生成默认配置
-      run: |
-        cd openwrt
-        make defconfig
-        echo "FILE_DATE=$(date +%Y%m%d%H%M)" >> "$GITHUB_ENV"
-
-    - name: 打包配置文件
-      run: |
-        cd openwrt
-        mkdir -p output
-        cp -f .config output/config
-
-    - name: 上传配置文件
-      uses: "actions/upload-artifact@main"
-      with:
-        name: "OpenWrt_Config_${{ env.FILE_DATE }}"
-        path: "openwrt/output"
