@@ -72,10 +72,6 @@ jobs:
         libncurses5-dev python2 python3 git wget curl zip unzip bzip2 p7zip-full rsync file \
         gettext libssl-dev libelf-dev autopoint libtool-bin perl findutils grep libreadline-dev
         sudo timedatectl set-timezone "$TZ"
-
-  
-  
-
         
     - name: 自动匹配仓库地址与分支
       id: repo
