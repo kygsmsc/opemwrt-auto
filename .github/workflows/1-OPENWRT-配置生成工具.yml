@@ -66,50 +66,7 @@ jobs:
         gettext libssl-dev libelf-dev autopoint libtool-bin perl findutils grep libreadline-dev
         sudo timedatectl set-timezone "$TZ"
 
-    - name: 自动匹配仓库地址与分支
-      id: repo
-      run: |
-        case "${{ github.event.inputs.source_repo }}" in
-          lede-master)
-            REPO_URL="https://github.com/coolsnowwolf/lede"
-            REPO_BRANCH="master"
-            ;;
-          openwrt-main)
-            REPO_URL="https://github.com/openwrt/openwrt"
-            REPO_BRANCH="main"
-            ;;
-          openwrt-24.10)
-            REPO_URL="https://github.com/openwrt/openwrt"
-            REPO_BRANCH="openwrt-24.10"
-            ;;
-          openwrt-23.05)
-            REPO_URL="https://github.com/openwrt/openwrt"
-            REPO_BRANCH="openwrt-23.05"
-            ;;
-          immortalwrt-master)
-            REPO_URL="https://github.com/immortalwrt/immortalwrt"
-            REPO_BRANCH="master"
-            ;;
-          immortalwrt-24.10)
-            REPO_URL="https://github.com/immortalwrt/immortalwrt"
-            REPO_BRANCH="openwrt-24.10"
-            ;;
-          istoreos-master)
-            REPO_URL="https://github.com/istoreos/istoreos"
-            REPO_BRANCH="main"
-            ;;
-          kygs-immortalwrt-master)
-            REPO_URL="https://github.com/kygsmsc/immortalwrt"
-            REPO_BRANCH="master"
-            ;;
-          *)
-            echo "错误：未定义的仓库"
-            exit 1
-            ;;
-        esac
-        echo "REPO_URL=$REPO_URL" >> "$GITHUB_OUTPUT"
-        echo "REPO_BRANCH=$REPO_BRANCH" >> "$GITHUB_OUTPUT"
-
+    
     - name: 克隆源码并自动切换版本 Tag
       run: |
         REPO_URL="${{ steps.repo.outputs.REPO_URL }}"
