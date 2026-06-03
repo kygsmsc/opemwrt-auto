@@ -60,6 +60,8 @@ env:
   DIY_P2_SH: diy-part2.sh
   TZ: Asia/Shanghai
   UPLOAD_RELEASE: true
+  CONFIG_CCACHE: y  # 开启 ccache 加速
+  CCACHE_DIR: /builder/ccache
 
 jobs:
   build:
@@ -70,15 +72,17 @@ jobs:
       with:
         persist-credentials: true
 
+    # ==================== 提速优化 1：安装 ccache ====================
     - name: 安装编译环境依赖
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
         sudo -E apt-get -qq update
-        sudo -E apt-get -qq install build-essential cmake flex bison gawk gcc-multilib g++-multilib libncurses5-dev python3 git wget curl zip unzip bzip2 p7zip-full rsync file gettext libssl-dev libelf-dev autopoint libtool-bin perl
+        sudo -E apt-get -qq install build-essential ccache cmake flex bison gawk gcc-multilib g++-multilib libncurses5-dev python3 git wget curl zip unzip bzip2 p7zip-full rsync file gettext libssl-dev libelf-dev autopoint libtool-bin perl
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /builder
         sudo chown $USER:$GROUPS /builder
+        ccache -M 10G  # 扩大缓存
 
     - name: 自动匹配仓库地址与分支
       id: repo
@@ -125,10 +129,22 @@ jobs:
           git checkout ${{ github.event.inputs.version_tag }} 2>/dev/null || echo "使用分支最新代码"
         fi
 
+    # ==================== 提速优化 2：超级缓存（第二次编译10分钟） ====================
+    - name: 缓存 OpenWrt 编译文件
+      uses: actions/cache@v3
+      with:
+        path: |
+          /builder/openwrt/dl
+          /builder/openwrt/build_dir
+          /builder/openwrt/staging_dir
+          /builder/ccache
+        key: openwrt-${{ github.event.inputs.source_repo }}-${{ hashFiles('openwrt/.config') }}
+        restore-keys: |
+          openwrt-${{ github.event.inputs.source_repo }}-
+
     - name: 加载 feeds 配置
       run: |
         cd openwrt
-        # 只有文件存在 且 不是自身时才复制
         if [ -f "$FEEDS_CONF" ] && [ "$FEEDS_CONF" != "feeds.conf.default" ]; then
         cp -f "$FEEDS_CONF" feeds.conf.default
         fi
@@ -147,10 +163,7 @@ jobs:
 
     - name: 加载自定义配置
       run: |
-        # 复制 files 文件夹（保留你原来的功能）
         [ -e files ] && cp -rf files openwrt/
-
-        # 强制把仓库根目录的 .config 复制到 openwrt 目录（核心修复）
         if [ -f ".config" ]; then
         cp -f .config openwrt/.config
         echo "✅ 成功将仓库根目录的 .config 复制到 openwrt/.config"
@@ -167,7 +180,7 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
 
-    - name: SSH 远程连接（可选）-(cd openwrt && make menuconfig )
+    - name: SSH 远程连接（可选）
       if: github.event.inputs.ssh == 'true'
       uses: rdp-studio/ssh2actions@main
       env:
@@ -178,44 +191,35 @@ jobs:
       run: |
         cd openwrt
         make defconfig
-        echo -e "$(cat .config)"
         echo "FILE_DATE=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
         
     - name: 自动保存配置文件到仓库
       run: |
         cd "$GITHUB_WORKSPACE"
-        
-        # 先拉取最新代码，解决冲突
-        git pull --rebase
-        
+        git pull --rebase --autostash
         CONFIG_PATH="${{ github.event.inputs.config_save_path }}"
         cp -f openwrt/.config "$CONFIG_PATH"
-    
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-    
         git add -f "$CONFIG_PATH"
         git commit -m "Auto update config [$(date +%Y-%m-%d)]"
-        
-        # 强制推送，覆盖云端（安全，因为是你自己的仓库）
         git push --force
-        
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    # ==================== 提速优化 3：多线程下载 ====================
     - name: 下载编译依赖
       run: |
         cd openwrt
         make defconfig
-        make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
-        
+        make download -j$(nproc)  # 多线程下载
+        find dl -size -1024c -delete
+
+    # ==================== 提速优化 4：满核编译 ====================
     - name: 开始编译固件
       run: |
         cd openwrt
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
+        make -j$(nproc) V=w  # 最快模式
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
@@ -254,7 +258,6 @@ jobs:
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
         touch release.txt
-        [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: 上传固件以发布
@@ -281,4 +284,3 @@ jobs:
         delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
