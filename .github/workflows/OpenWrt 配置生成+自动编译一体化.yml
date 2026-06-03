@@ -202,16 +202,17 @@ jobs:
     - name: 自动保存配置文件到仓库
       run: |
         cd "$GITHUB_WORKSPACE"
-        git pull --rebase --autostash
         CONFIG_PATH="${{ github.event.inputs.config_save_path }}"
-        cp -f openwrt/.config "$CONFIG_PATH"
+        cp -f openwrt/.config "$CONFIG_PATH" || true
+        git checkout . || true
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-        git add -f "$CONFIG_PATH"
-        git commit -m "Auto update config [$(date +%Y-%m-%d)]" --ignore-errors --allow-empty
-        git push --force
+        git add -f "$CONFIG_PATH" 2>/dev/null || true
+        git commit -m "Auto update config [$(date +%Y-%m-%d)]" --allow-empty 2>/dev/null || true
+        git push --force 2>/dev/null || true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: true
 
     # ==================== 提速优化 3：多线程下载 ====================
     - name: 下载编译依赖
