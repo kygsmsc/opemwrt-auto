@@ -58,8 +58,10 @@ env:
   FEEDS_CONF: feeds.conf.default
   DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
+  DIY_P3_SH: diy-part3.sh
   TZ: Asia/Shanghai
   UPLOAD_RELEASE: true
+  UPLOAD_FIRMWARE: true
   CONFIG_CCACHE: y  # 开启 ccache 加速
   CCACHE_DIR: /builder/ccache
 
@@ -79,6 +81,10 @@ jobs:
       run: |
         sudo -E apt-get -qq update
         sudo -E apt-get -qq install build-essential ccache cmake flex bison gawk gcc-multilib g++-multilib libncurses5-dev python3 git wget curl zip unzip bzip2 p7zip-full rsync file gettext libssl-dev libelf-dev autopoint libtool-bin perl
+        sudo apt-get install python3.9
+        sudo -E apt-get -qq autoremove --purge
+        sudo -E systemctl daemon-reload
+        sudo -E apt-get -qq  clean && sudo -E apt-get -qq autoclean
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /builder
         sudo chown $USER:$GROUPS /builder
@@ -128,7 +134,7 @@ jobs:
           git fetch --tags 2>/dev/null || true
           git checkout ${{ github.event.inputs.version_tag }} 2>/dev/null || echo "使用分支最新代码"
         fi
-
+        echo "status=success" >> ${GITHUB_OUTPUT}
     # ==================== 提速优化 2：超级缓存（第二次编译10分钟） ====================
     - name: 缓存 OpenWrt 编译文件
       uses: actions/cache@v3
