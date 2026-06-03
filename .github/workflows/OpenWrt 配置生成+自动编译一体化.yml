@@ -186,7 +186,7 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
 
-    - name: SSH 远程连接（可选）
+    - name: SSH 远程连接（可选）（cd openwrt && make menuconfig）
       if: github.event.inputs.ssh == 'true'
       uses: rdp-studio/ssh2actions@main
       env:
