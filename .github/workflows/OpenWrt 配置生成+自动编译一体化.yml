@@ -147,10 +147,18 @@ jobs:
 
     - name: 加载自定义配置
       run: |
-        [ -e files ] && mv files openwrt/files
-                        # 只有 CONFIG_FILE 存在且不为空时才执行 mv
-        if [ -n "$CONFIG_FILE" ] && [ -e "$CONFIG_FILE" ]; then
-            mv -f "$CONFIG_FILE" openwrt/.config
+        # 复制 files 文件夹（保留你原来的功能）
+        [ -e files ] && cp -rf files openwrt/
+
+        # 强制把仓库根目录的 .config 复制到 openwrt 目录（核心修复）
+        if [ -f ".config" ]; then
+        cp -f .config openwrt/.config
+        echo "✅ 成功将仓库根目录的 .config 复制到 openwrt/.config"
+        elif [ -f "config.seed" ]; then
+        cp -f config.seed openwrt/.config
+        echo "✅ 使用 config.seed 作为配置文件"
+        else
+        echo "⚠️ 未找到自定义配置文件，使用默认配置"
         fi
 
     - name: 执行自定义脚本2
