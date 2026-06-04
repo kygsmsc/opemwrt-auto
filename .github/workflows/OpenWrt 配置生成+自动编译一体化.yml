@@ -45,7 +45,7 @@ on:
       ssh:
         description: "启用 SSH 连接（可在线 make menuconfig）"
         required: false
-        default: false
+        default: true
         type: boolean
         
       config_save_path:
