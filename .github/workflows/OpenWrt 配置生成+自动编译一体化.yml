@@ -54,6 +54,12 @@ on:
         default: ".config"
         type: text
 
+      delete_last_release:
+        description: "是否删除【上一个旧版本】？默认不删除"
+        required: false
+        default: "false"
+        type: boolean
+
 env:
   FEEDS_CONF: feeds.conf.default
   DIY_P1_SH: diy-part1.sh
@@ -203,15 +209,38 @@ jobs:
       run: |
         cd "$GITHUB_WORKSPACE"
         CONFIG_PATH="${{ github.event.inputs.config_save_path }}"
-        cp -f openwrt/.config "$CONFIG_PATH" || true
+
+        echo -e "\033[34m===== 开始打印 openwrt/.config 配置内容 =====\033[0m"
+        cat openwrt/.config
+        echo -e "\033[34m===== .config内容打印完毕 =====\033[0m"
+
+        # 复制文件并判断结果
+        if cp -f openwrt/.config "$CONFIG_PATH"; then
+        echo -e "\033[32m✅ 文件复制成功：已将.config保存至 => $CONFIG_PATH\033[0m"
+        else
+        echo -e "\033[31m❌ 文件复制失败：无法拷贝.config到 $CONFIG_PATH\033[0m"
+        fi
+
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-        git add -f "$CONFIG_PATH" 2>/dev/null || true
-        git commit -m "Auto update config [$(date +%Y-%m-%d)]" --allow-empty 2>/dev/null || true
-        git push --force 2>/dev/null || true
+
+        git add -f "$CONFIG_PATH" 2>/dev/null
+        # 提交判断
+        if git commit -m "Auto update config [$(date +%Y-%m-%d)]" --allow-empty 2>/dev/null; then
+        echo -e "\033[32m✅ Git提交配置文件成功\033[0m"
+        else
+        echo -e "\033[33m⚠️ 无配置变更，本次无需提交\033[0m"
+        fi
+
+        # 推送判断
+        if git push --force 2>/dev/null; then
+        echo -e "\033[32m✅ 配置文件已成功推送至远程仓库\033[0m"
+        else
+        echo -e "\033[31m❌ Git推送远程仓库失败\033[0m"
+        fi
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      continue-on-error: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          continue-on-error: true
 
     # ==================== 提速优化 3：多线程下载 ====================
     - name: 下载编译依赖
@@ -282,11 +311,11 @@ jobs:
         retain_days: 0
         keep_minimum_runs: 2
 
-    - name: 删除旧版本
+    - name: 删除旧版本（仅删除上一个）
+      if: github.event.inputs.delete_last_release == 'true' && env.UPLOAD_RELEASE == 'true' && !cancelled()
       uses: dev-drprasad/delete-older-releases@master
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
-        keep_latest: 3
+        keep_latest: 1
         delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
