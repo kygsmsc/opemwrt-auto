@@ -12,7 +12,7 @@ on:
         required: true
         default: 'target/linux/ramips/mt7621/base-files/etc/init.d/irqbalance-mt7621'
       branch:
-        description: '目标分支 (留空则使用默认分支)'
+        description: '目标分支 (留空则自动检测)'
         required: false
         default: ''
 
@@ -28,7 +28,7 @@ jobs:
         with:
           repository: ${{ github.event.inputs.target_repo }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event.inputs.branch || github.ref_name }}
+          ref: ${{ github.event.inputs.branch || 'master' }}  # 默认使用 master
           fetch-depth: 0
 
       - name: 检查仓库分支
@@ -55,7 +55,7 @@ jobs:
           # 获取当前 Git 中的文件权限
           CURRENT_MODE=$(git ls-files --stage "$FILE" | awk '{print $1}')
           
-          # 设置可执行权限（幂等操作）
+          # 设置可执行权限
           git update-index --chmod=+x "$FILE"
           git add "$FILE"
           
