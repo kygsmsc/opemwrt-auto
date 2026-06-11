@@ -1,0 +1,58 @@
+name: 修复文件执行权限
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: '目标仓库 (格式: owner/repo)'
+        required: true
+        default: 'your-username/your-repo'
+      target_file:
+        description: '目标文件路径'
+        required: true
+        default: 'path/to/your/file'
+      branch:
+        description: '目标分支'
+        required: false
+        default: 'main'
+
+jobs:
+  fix-permission:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 检出目标仓库
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.target_repo }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: 设置文件为可执行
+        run: |
+          FILE="${{ github.event.inputs.target_file }}"
+          
+          # 检查文件是否存在
+          [ -f "$FILE" ] || { echo "❌ 文件不存在: $FILE"; exit 1; }
+          
+          # 设置可执行权限并提交
+          git update-index --chmod=+x "$FILE"
+          git add "$FILE"
+          
+          echo "✅ 已将 $FILE 设置为可执行"
+
+      - name: 提交并推送
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --cached --quiet; then
+            echo "ℹ️ 无需提交，权限未变化"
+          else
+            git commit -m "🔧 自动设置可执行权限: ${{ github.event.inputs.target_file }}"
+            git push
+            echo "🚀 已推送更改"
+          fi
+
