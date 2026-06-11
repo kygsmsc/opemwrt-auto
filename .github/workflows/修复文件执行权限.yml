@@ -6,15 +6,15 @@ on:
       target_repo:
         description: '目标仓库 (格式: owner/repo)'
         required: true
-        default: 'your-username/your-repo'
+        default: 'kygsmsc/immortalwrt'
       target_file:
         description: '目标文件路径'
         required: true
-        default: 'path/to/your/file'
+        default: 'target/linux/ramips/mt7621/base-files/etc/init.d/irqbalance-mt7621'
       branch:
-        description: '目标分支'
+        description: '目标分支 (留空则使用默认分支)'
         required: false
-        default: 'main'
+        default: ''
 
 jobs:
   fix-permission:
@@ -28,8 +28,15 @@ jobs:
         with:
           repository: ${{ github.event.inputs.target_repo }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event.inputs.branch }}
-          fetch-depth: 0  # 关键修复：获取完整历史
+          ref: ${{ github.event.inputs.branch != '' && github.event.inputs.branch || '' }}
+          fetch-depth: 0
+
+      - name: 检查仓库分支
+        run: |
+          echo "当前仓库分支信息："
+          git branch -a
+          echo "当前 HEAD："
+          git rev-parse --abbrev-ref HEAD
 
       - name: 设置文件为可执行
         run: |
@@ -40,6 +47,8 @@ jobs:
             echo "❌ 错误: 文件不存在: $FILE"
             echo "当前目录内容:"
             ls -la
+            echo "尝试查找文件："
+            find . -name "$(basename "$FILE")" -type f 2>/dev/null || true
             exit 1
           fi
           
@@ -54,10 +63,13 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
+          # 获取当前分支
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          
           if git diff --cached --quiet; then
             echo "ℹ️ 无需提交，权限未变化"
           else
             git commit -m "🔧 自动设置可执行权限: ${{ github.event.inputs.target_file }}"
-            git push origin ${{ github.event.inputs.branch }}
-            echo "🚀 已推送更改"
+            git push origin "$CURRENT_BRANCH"
+            echo "🚀 已推送更改到分支: $CURRENT_BRANCH"
           fi
