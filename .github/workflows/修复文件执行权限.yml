@@ -28,7 +28,7 @@ jobs:
         with:
           repository: ${{ github.event.inputs.target_repo }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event.inputs.branch != '' && github.event.inputs.branch || '' }}
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
           fetch-depth: 0
 
       - name: 检查仓库分支
@@ -52,11 +52,21 @@ jobs:
             exit 1
           fi
           
-          # 设置可执行权限
+          # 获取当前 Git 中的文件权限
+          CURRENT_MODE=$(git ls-files --stage "$FILE" | awk '{print $1}')
+          
+          # 设置可执行权限（幂等操作）
           git update-index --chmod=+x "$FILE"
           git add "$FILE"
           
-          echo "✅ 已将 $FILE 设置为可执行"
+          # 获取新的 Git 权限
+          NEW_MODE=$(git ls-files --stage "$FILE" | awk '{print $1}')
+          
+          if [ "$CURRENT_MODE" = "$NEW_MODE" ]; then
+            echo "ℹ️ 文件 $FILE 已经具有可执行权限，无需修改。"
+          else
+            echo "✅ 已将 $FILE 设置为可执行 (从 $CURRENT_MODE 变为 $NEW_MODE)"
+          fi
 
       - name: 提交并推送
         run: |
